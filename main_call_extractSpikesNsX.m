@@ -3,7 +3,7 @@
 
 
 %*******Root path where files are located
-root_file_path = 'C:\Users\Adam\Box\';
+root_file_path = 'C:\Users\arouse\Documents\MEGA\';
 
 
 %*********Added tools needed: NPMK and HowToReadAndWriteNexAndNex5FilesInMatlab
@@ -40,11 +40,11 @@ envInfo.array_to_fileNum = ones(size(envInfo.channels_to_read_by_array));
 
 
  
-root_file_path = 'C:\Users\Adam\Box\';
-dataPaths.input_file_path	= [root_file_path 'DataFiles\data_raw\monk_p\20160504_COT_precision\P_CerebusData\'];
-dataPaths.input_file_path	= 'C:\DataFiles\data_raw\monk_p\20160504_COT_precision\P_CerebusData\';
-dataPaths.median_path		= [root_file_path 'DataFiles\data_processed\monk_p\20160504_COT_precision\SignalQuality\'];
-dataPaths.save_path			= [root_file_path 'DataFiles\data_processed\monk_p\20160504_COT_precision\BB_to_Spikes\'];
+root_data_path = 'R:\SOM RSCH\RouseLab\';
+dataPaths.input_file_path	= [root_data_path 'DataFiles\ArchivedProjects\SchieberLab\data_raw\monk_p\20160504_COT_precision\P_CerebusData\'];
+% dataPaths.input_file_path	= 'C:\DataFiles\data_raw\monk_p\20160504_COT_precision\P_CerebusData\';
+dataPaths.median_path		= [root_data_path 'DataFiles\Project_Data\20201007_SpikeSorting\MedianPath\'];
+dataPaths.save_path			= [root_data_path 'DataFiles\Project_Data\20201007_SpikeSorting\BBtoSpikes\'];
 
 
 
@@ -52,11 +52,12 @@ filtInfo.overwrite_median = true;
 filtInfo.num_trials_for_median = 50;
 filtInfo.filt_order = 4;  % 4th order filter
 filtInfo.band_limits = [250, 5000]; % bandpass between 250-7500 Hz
-filtInfo.pre_data       = 12;    % Number of data points before trigger time point
-filtInfo.post_data      = 38;   % Number of data points after trigger time point
-filtInfo.align_spikes   = false; %Align spikes based on peak to get better alignment of waveforms
-filtInfo.interp_factor  = 4;    %Align spikes based on peak to get better alignment of waveforms
-filtInfo.peak_window    = 10;   %Number of data points after trigger where waveform peak can occur
+filtInfo.time_pre       = 175;    % Amount of time before trigger for snippet (microseconds)
+filtInfo.time_post      = 625;    % Amount of time after trigger for snippet (microseconds)
+filtInfo.time_peak_excl = 625;   %Minimum time from previous to next threshold crossing
+filtInfo.align_spikes   = true; %Align spikes based on peak to get better alignment of waveforms
+filtInfo.interp_factor  = 4;    %Interpolation factor for alignment of spikes 
+filtInfo.peak_time      = 300;   %Number of data points after trigger where waveform peak can occur  (microseconds)
 filtInfo.peak_offset    = 2;    %Number of data points after threshold to put peak of waveform
 filtInfo.prewhiten_data = true;
 filtInfo.throwout_crosstalk = true;
@@ -65,7 +66,7 @@ filtInfo.std_per_chan   = 5;
 filtInfo.throwout_large_artifact = true;
 filtInfo.max_number_outlier_spikes = 1000;
 filtInfo.outlier_threshold = 2;
-filtInfo.threshold_scale_factor = 10;  %Threshold scale factor
+filtInfo.threshold_scale_factor = 7.5;  %Threshold scale factor
 
 filtInfo.use_only_trials = false;
 filtInfo.median_window = 1000;  %1000 ms window for median (only used when not using actual trials)

@@ -5,6 +5,7 @@
 % v0.4: Adam Rouse, 6/30/2019
 % v0.4: Adam Rouse, 7/5/2019
 % v0.6: Adam Rouse, 7/29/2019
+% v0.7: Adam Rouse, 3/20/2021
 
 %   Work flow overall: split NSx files via splitNSx.m file, then run by each array.
 %   Work flow in current function: make most of things to struct, call functions in dropbox, save back into the HDD.
@@ -27,10 +28,11 @@ end
 
 if nargin < 4 || isempty(filtInfo)
     filtInfo.filt_order = 4;  %4th order filter
-    filtInfo.band_limits = [250, 7500]; %bandpass between 250-7500 Hz
-    filtInfo.pre_data       = 6;   %Number of data points before trigger time point
-    filtInfo.post_data      = 18;  %Number of data points after trigger time point
-    filtInfo.peak_window    = 10;  %Number of data points after trigger where waveform peak can occur
+    filtInfo.band_limits = [250, 5000]; % bandpass between 250-7500 Hz
+    filtInfo.time_pre       = 175;    % Amount of time before trigger for snippet (microseconds)
+    filtInfo.time_post      = 625;    % Amount of time after trigger for snippet (microseconds)
+    filtInfo.peak_excl_wind = 625;   %Minimum time from previous to next threshold crossing
+    filtInfo.peak_window    = 300;   %Number of data points after trigger where waveform peak can occur  (microseconds)
     filtInfo.align_spikes   = false;
     filtInfo.throwout_crosstalk = false;
     filtInfo.throwout_large_artifact = false;
@@ -48,7 +50,7 @@ end
 % cd(data_paths.file_path);
 
 
-version = '0.4';
+version = '0.7';
 
 fileInfo    = openNSx( [dataPaths.input_file_path , envInfo.ns5_file_name], 'noread');
 eventInfo   = openNEV( [dataPaths.input_file_path , envInfo.nev_file_name], 'noread');
@@ -76,13 +78,32 @@ numDataPoints = fileInfo.MetaTags.DataPoints(1);
 %   Sampling frequency (30K)
 envInfo.samp_rate = fileInfo.MetaTags.SamplingFreq;
 if ~isfield(filtInfo, 'pre_data')
-    filtInfo.pre_data       = round(2e-4*envInfo.samp_rate);   %Number of data points before trigger time point
+    if isfield(filtInfo, 'time_pre')
+        filtInfo.pre_data       = ceil(filtInfo.time_pre*1e-6*envInfo.samp_rate);   %Number of data points before trigger time point
+    else
+        filtInfo.pre_data       = ceil(1.75e-4*envInfo.samp_rate);   %Number of data points before trigger time point
+    end
 end
 if ~isfield(filtInfo, 'post_data')
-    filtInfo.post_data      = round(6e-4*envInfo.samp_rate);  %Number of data points after trigger time point
+    if isfield(filtInfo, 'time_post')
+        filtInfo.post_data      = ceil(filtInfo.time_post*1e-6*envInfo.samp_rate);   %Number of data points before trigger time point
+    else
+        filtInfo.post_data      = ceil(6.25e-4*envInfo.samp_rate);  %Number of data points after trigger time point
+    end
+end
+if ~isfield(filtInfo, 'peak_excl_data')
+    if isfield(filtInfo, 'time_peak_excl')
+        filtInfo.peak_excl_data     = ceil(filtInfo.time_peak_excl*1e-6*envInfo.samp_rate);   %Number of data points before next threshold can occur
+    else
+        filtInfo.peak_excl_data     = ceil(6.25e-4*envInfo.samp_rate);  %Number of data points before next threshold can occur
+    end
 end
 if ~isfield(filtInfo, 'peak_window')
-    filtInfo.peak_window    = round(3.33e-4*envInfo.samp_rate);   %Number of data points after trigger where waveform peak can occur
+    if isfield(filtInfo, 'peak_time')
+        filtInfo.peak_window    = ceil(filtInfo.peak_time*1e-6*envInfo.samp_rate);   %Number of data points after trigger where waveform peak can occur
+    else
+        filtInfo.peak_window    = ceil(3e-4*envInfo.samp_rate);   %Number of data points after trigger where waveform peak can occur
+    end
 end
 if ~isfield(filtInfo, 'peak_offset')
     filtInfo.peak_offset = 2; %Number of data points after threshold to put peak of waveform
@@ -199,8 +220,11 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
                     if exist('trialMargin','var')
                         threshold_crossings = threshold_crossings(threshold_crossings>(trialMargin+1) & threshold_crossings< (size(tempData,1)-trialMargin+1));
                     end
-                    if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings([true; (diff(threshold_crossings)>filtInfo.post_data)]); end
+                    %Remove any threshold crossings within the window exclusion 
+                    if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings([true; (diff(threshold_crossings)>filtInfo.peak_excl_data)]); end
+                    %Remove any snippets that don't have data at the end of the file
                     if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings(threshold_crossings + filtInfo.post_data < size(tempData,1)); end
+                    %Remove any snippets that don't have data at the beginning of the file
                     if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings(threshold_crossings - filtInfo.pre_data > 0); end
                     if ~isempty(threshold_crossings)
                         curr_spike_snippets = tempData(threshold_crossings + (-filtInfo.pre_data:filtInfo.post_data), ch);
