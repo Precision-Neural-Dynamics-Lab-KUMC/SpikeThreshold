@@ -31,8 +31,9 @@ if nargin < 4 || isempty(filtInfo)
     filtInfo.band_limits = [250, 5000]; % bandpass between 250-7500 Hz
     filtInfo.time_pre       = 175;    % Amount of time before trigger for snippet (microseconds)
     filtInfo.time_post      = 625;    % Amount of time after trigger for snippet (microseconds)
-    filtInfo.peak_excl_wind = 625;   %Minimum time from previous to next threshold crossing
-    filtInfo.peak_window    = 300;   %Number of data points after trigger where waveform peak can occur  (microseconds)
+    filtInfo.time_peak_excl = 625;   %Minimum time from previous threshold crossing that the next spike can occur
+    filtInfo.time_req_baseline = 175;  %Minimum time signal must be below threshold crossing before next spike can occur
+    filtInfo.peak_window    = 150;   %Time after trigger where waveform peak can occur  (microseconds)
     filtInfo.align_spikes   = false;
     filtInfo.throwout_crosstalk = false;
     filtInfo.throwout_large_artifact = false;
@@ -93,11 +94,19 @@ if ~isfield(filtInfo, 'post_data')
 end
 if ~isfield(filtInfo, 'peak_excl_data')
     if isfield(filtInfo, 'time_peak_excl')
-        filtInfo.peak_excl_data     = ceil(filtInfo.time_peak_excl*1e-6*envInfo.samp_rate);   %Number of data points before next threshold can occur
+        filtInfo.peak_excl_data     = ceil(filtInfo.time_peak_excl*1e-6*envInfo.samp_rate);   %Number of data points from previous threshold crossing before next spike threshold crossing can occur
     else
-        filtInfo.peak_excl_data     = ceil(6.25e-4*envInfo.samp_rate);  %Number of data points before next threshold can occur
+        filtInfo.peak_excl_data     = filtInfo.post_data ;  %Number of data points from previous threshold crossing before next spike threshold crossing can occur
     end
 end
+if ~isfield(filtInfo, 'req_base_data')
+    if isfield(filtInfo, 'time_req_baseline')
+        filtInfo.req_base_data     = ceil(filtInfo.time_req_baseline*1e-6*envInfo.samp_rate);   %Number of data points of baseline (not past threshold) needed before next spike threshold crossing can occur
+    else
+        filtInfo.req_base_data     = filtInfo.pre_data ;   %Number of data points of baseline (not past threshold) needed before next spike threshold crossing can occur
+    end
+end
+
 if ~isfield(filtInfo, 'peak_window')
     if isfield(filtInfo, 'peak_time')
         filtInfo.peak_window    = ceil(filtInfo.peak_time*1e-6*envInfo.samp_rate);   %Number of data points after trigger where waveform peak can occur
@@ -221,7 +230,15 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
                         threshold_crossings = threshold_crossings(threshold_crossings>(trialMargin+1) & threshold_crossings< (size(tempData,1)-trialMargin+1));
                     end
                     %Remove any threshold crossings within the window exclusion 
-                    if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings([true; (diff(threshold_crossings)>filtInfo.peak_excl_data)]); end
+                    if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings([true; (diff(threshold_crossings)>filtInfo.req_base_data)]); end
+                    %Remove any threshold crossings within the window exclusion 
+                    if length(threshold_crossings)>2
+                        short_crossings = [false; diff(threshold_crossings)<filtInfo.peak_excl_data & [true; diff(threshold_crossings(1:(end-1)))>=filtInfo.peak_excl_data]];
+                        while any(short_crossings)
+                            threshold_crossings = threshold_crossings(~short_crossings);
+                            short_crossings = [false; diff(threshold_crossings)<filtInfo.peak_excl_data & [true; diff(threshold_crossings(1:(end-1)))>=filtInfo.peak_excl_data]];
+                        end
+                    end
                     %Remove any snippets that don't have data at the end of the file
                     if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings(threshold_crossings + filtInfo.post_data < size(tempData,1)); end
                     %Remove any snippets that don't have data at the beginning of the file
@@ -229,7 +246,8 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
                     if ~isempty(threshold_crossings)
                         curr_spike_snippets = tempData(threshold_crossings + (-filtInfo.pre_data:filtInfo.post_data), ch);
                         curr_spike_snippets = reshape(curr_spike_snippets,[],filtInfo.snippet_length);
-                        
+                        %Note, spike times are saved based on the original threshold crossing, not adjusted for the spike alignment
+                        spike_times{ch}     = [spike_times{ch}; strobeInfo.trial_start_samp(tr)+uint32(threshold_crossings)-1];
                         if filtInfo.align_spikes
                             peak_times = find_waveform_peaks(curr_spike_snippets', filtInfo.pre_data, filtInfo.peak_window, filtInfo.interp_factor);
                             threshold_crossings = threshold_crossings + floor(peak_times)';
@@ -245,7 +263,7 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
                         end
                         
                         spike_snippets{ch}  = [spike_snippets{ch}, curr_spike_snippets'];
-                        spike_times{ch}     = [spike_times{ch}; strobeInfo.trial_start_samp(tr)+uint32(threshold_crossings)-1];
+                        
                     end
                 end
             end

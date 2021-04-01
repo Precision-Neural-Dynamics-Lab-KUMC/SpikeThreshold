@@ -23,11 +23,11 @@ envInfo.nev_file_name = regexprep( envInfo.ns5_file_name, 'ns\d', 'nev');
 
 %*********Each element of cell is a group of channels in an array that will have
 %their covariance calculated and the common average subtracted away
-envInfo.channels_to_read_by_array = {1:16,17:32};
+envInfo.channels_to_read_by_array = {1:16,17:32,33:48,49:64};
 
 %*******The output .nex file(s) are specified here
 %.output_names is the .nex file names to be output
-envInfo.output_names = {'P_20170705_GH_out.nex'};
+envInfo.output_names = {'P_20170705_GHIJ_out.nex'};
 %.array_to_fileNum is which file in .output_names a given array in
 %.channels_to_read_by_array should be output 
 % All 1's simply outputs all specified channels to the first file name
@@ -54,10 +54,11 @@ filtInfo.filt_order = 4;  % 4th order filter
 filtInfo.band_limits = [250, 5000]; % bandpass between 250-7500 Hz
 filtInfo.time_pre       = 175;    % Amount of time before trigger for snippet (microseconds)
 filtInfo.time_post      = 625;    % Amount of time after trigger for snippet (microseconds)
-filtInfo.time_peak_excl = 625;   %Minimum time from previous to next threshold crossing
+filtInfo.time_peak_excl = 625;   %Minimum time from previous threshold crossing that the next spike can occur
+filtInfo.time_req_baseline = 175;  %Minimum time signal must be below threshold crossing before next spike can occur
 filtInfo.align_spikes   = true; %Align spikes based on peak to get better alignment of waveforms
 filtInfo.interp_factor  = 4;    %Interpolation factor for alignment of spikes 
-filtInfo.peak_time      = 300;   %Number of data points after trigger where waveform peak can occur  (microseconds)
+filtInfo.peak_time      = 150;   %Time after trigger where waveform peak can occur  (microseconds)
 filtInfo.peak_offset    = 2;    %Number of data points after threshold to put peak of waveform
 filtInfo.prewhiten_data = true;
 filtInfo.throwout_crosstalk = true;
