@@ -54,9 +54,11 @@ end
 version = '0.8';
 
 fileInfo    = openNSx( [dataPaths.input_file_path , envInfo.ns5_file_name], 'noread');
-% eventInfo   = openNEV( [dataPaths.input_file_path , envInfo.nev_file_name], 'noread');
-% eventInfo = [];
-
+try
+eventInfo   = openNEV( [dataPaths.input_file_path , envInfo.nev_file_name], 'noread');
+catch
+    eventInfo = [];
+end
 %Check to see if electrode channel is actually in data file, remove those that are not, AGR 20200220 
 ch_in_data_file = [fileInfo.ElectrodesInfo.ElectrodeID];
 for iArr = 1:length(envInfo.channels_to_read_by_array)
@@ -164,7 +166,7 @@ for iFile = unique_files
 nexFileData      = create_blank_nex();
 nexFileData.tend = numDataPoints./envInfo.samp_rate;
 
-if exist('eventInfo', 'var') &&  ~isempty(eventInfo.Data.SerialDigitalIO.TimeStamp)
+if exist('eventInfo', 'var') &&  ~isempty('eventInfo') && ~isempty(eventInfo.Data.SerialDigitalIO.TimeStamp)
     % Events codes are from .nev files.
     nexFileData.markers{1,1}.name = 'Strobed';
     nexFileData.markers{1,1}.varVersion = 100;
