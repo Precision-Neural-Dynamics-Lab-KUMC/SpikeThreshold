@@ -92,11 +92,14 @@ for ar = 1:length(envInfo.channels_to_read_by_array)
             end
             SigQuality(curr_index).TestMedians = cellfun(@(x) median(abs(x)), Data, 'Uni', false);
             SigQuality(curr_index).TestMedians = cat(1,SigQuality(curr_index).TestMedians{:});
+            blank_time_periods = all(SigQuality(curr_index).TestMedians<1,2);
+            SigQuality(curr_index).TestMedians(SigQuality(curr_index).TestMedians<1) = NaN;
             SigQuality(curr_index).ChMedians = nanmedian(SigQuality(curr_index).TestMedians,1);
             %Check if any channels have no signal, all values equal 0 (<1 to avoid rounding errors)
             SigQuality(curr_index).BlankChannels = SigQuality(curr_index).ChMedians<1;
             SigQuality(curr_index).ChMedians(SigQuality(curr_index).BlankChannels) = 0;  %Set channels with no signal to exactly 0
             
+            Data = Data(~blank_time_periods);
             tempData = cat(1,Data{:});
             tempData = tempData(:,~SigQuality(curr_index).BlankChannels);
             SigQuality(curr_index).covMat = cov(tempData);
