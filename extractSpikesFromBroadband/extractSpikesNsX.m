@@ -166,7 +166,7 @@ for iFile = unique_files
 nexFileData      = create_blank_nex();
 nexFileData.tend = numDataPoints./envInfo.samp_rate;
 
-if exist('eventInfo', 'var') &&  ~isempty('eventInfo') && ~isempty(eventInfo.Data.SerialDigitalIO.TimeStamp)
+if exist('eventInfo', 'var') &&  ~isempty(eventInfo) && ~isempty(eventInfo.Data.SerialDigitalIO.TimeStamp)
     % Events codes are from .nev files.
     nexFileData.markers{1,1}.name = 'Strobed';
     nexFileData.markers{1,1}.varVersion = 100;
