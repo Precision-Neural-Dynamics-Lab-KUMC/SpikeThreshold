@@ -328,6 +328,7 @@ for k = 1:length(nexFileData.neurons)
     nexFileData.neurons{k}.name((end+1):64) = 0;  %Add null character to name to make 64 character string padded by nulls, important for reading back into plexon offline sorter
     nexFileData.waves{k}.name((end+1):64)   = 0;
 end
+% save('ThresholdedData.mat', 'nexFileData');  %For debugging
 % writeNex5File(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile} '5']);
 writeNexFile(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}] );
 end
