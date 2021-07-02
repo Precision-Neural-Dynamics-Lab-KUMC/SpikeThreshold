@@ -3,31 +3,31 @@
 
 
 %*******Root path where files are located
-root_file_path = 'C:\Users\arouse\Documents\MEGA\';
+root_file_path = 'C:\Users\arouse\OneDrive - University of Kansas Medical Center\';
 
 
 %*********Added tools needed: NPMK and HowToReadAndWriteNexAndNex5FilesInMatlab
-addpath(genpath([root_file_path 'added_matlab_tools\NPMK-4.5.3.0']))
+% addpath(genpath([root_file_path 'added_matlab_tools\NPMK-4.5.3.0']))
 addpath(genpath([root_file_path 'added_matlab_tools\HowToReadAndWriteNexAndNex5FilesInMatlab']))
 
 %********Add extractSpikesFromBroadBand to path
 addpath(genpath('.\extractSpikesFromBroadBand'))
 
 %*****File name to read
-envInfo.ns5_file_name	= 'P_20170705_GHIJKLA+A_BB1-64.ns5';
+envInfo.rec_file_name	= 'A_20210630_Ped3_Test.rec';
 
-%*****Currently set up assuming .ns5 and .nev have same file name, can also
-%be edited here with a name independent of .ns5 name
-envInfo.nev_file_name = regexprep( envInfo.ns5_file_name, 'ns\d', 'nev');  
+% %*****Currently set up assuming .ns5 and .nev have same file name, can also
+% %be edited here with a name independent of .ns5 name
+% envInfo.nev_file_name = regexprep( envInfo.ns5_file_name, 'ns\d', 'nev');  
 
 
 %*********Each element of cell is a group of channels in an array that will have
 %their covariance calculated and the common average subtracted away
-envInfo.channels_to_read_by_array = {1:16,17:32,33:48,49:64};
+envInfo.channels_to_read_by_array = {1:32,33:64,65:96,97:128};
 
 %*******The output .nex file(s) are specified here
 %.output_names is the .nex file names to be output
-envInfo.output_names = {'P_20170705_GHIJ_out.nex'};
+envInfo.output_names = {'A_20210630_Ped3_Test_out.nex'};
 %.array_to_fileNum is which file in .output_names a given array in
 %.channels_to_read_by_array should be output 
 % All 1's simply outputs all specified channels to the first file name
@@ -41,10 +41,10 @@ envInfo.array_to_fileNum = ones(size(envInfo.channels_to_read_by_array));
 
  
 root_data_path = 'R:\SOM RSCH\RouseLab\';
-dataPaths.input_file_path	= [root_data_path 'DataFiles\ArchivedProjects\SchieberLab\data_raw\monk_p\20160504_COT_precision\P_CerebusData\'];
+dataPaths.input_file_path	= [root_data_path 'DataFiles\Recorded_Data\Monkey\monk_A\InitialTesting20210622\\'];
 % dataPaths.input_file_path	= 'C:\DataFiles\data_raw\monk_p\20160504_COT_precision\P_CerebusData\';
-dataPaths.median_path		= [root_data_path 'DataFiles\Project_Data\20201007_SpikeSorting\MedianPath\'];
-dataPaths.save_path			= [root_data_path 'DataFiles\Project_Data\20201007_SpikeSorting\BBtoSpikes\'];
+dataPaths.median_path		= [root_data_path '\DataFiles\Project_Data\20210622_InitialTesting\dataProcessing\SpikeQuality\'];
+dataPaths.save_path			= [root_data_path 'DataFiles\Project_Data\20210622_InitialTesting\dataProcessing\BBtoSpikes\'];
 
 
 

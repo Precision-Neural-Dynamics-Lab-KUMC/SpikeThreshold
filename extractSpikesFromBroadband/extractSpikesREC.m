@@ -53,7 +53,7 @@ end
 
 version = '0.8';
 
-fileInfo    = openNSx( [dataPaths.input_file_path , envInfo.ns5_file_name], 'noread');
+fileInfo    = openNSx( [dataPaths.input_file_path , envInfo.rec_file_name], 'noread');
 try
 eventInfo   = openNEV( [dataPaths.input_file_path , envInfo.nev_file_name], 'noread');
 catch
@@ -152,7 +152,7 @@ if isempty(strobeInfo)
     strobeInfo.TrialIDs = 1:length(strobeInfo.trial_start_samp);
 end
 
-sigQual_name = regexprep(envInfo.ns5_file_name, '.ns\d', '_SigQual.mat');
+sigQual_name = regexprep(envInfo.rec_file_name, '.ns\d', '_SigQual.mat');
 %% Converting into nex files
 %   Create empty nex file in save path and write that at same folder.
 % cd( data_paths.save_path );
@@ -217,7 +217,7 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
         if strobeInfo.trial_end_samp(tr) < numDataPoints
             % Time string
             time_string = ['t:' num2str(strobeInfo.trial_start_samp(tr)) ':' num2str(strobeInfo.trial_end_samp(tr))];
-            tempData = openNSx( [dataPaths.input_file_path , envInfo.ns5_file_name], 'read', ch_string, time_string,  'sample');
+            tempData = openNSx( [dataPaths.input_file_path , envInfo.rec_file_name], 'read', ch_string, time_string,  'sample');
             
             % Double conversion( % Matlab 2017 specific (?) )
             tempData.Data   = double(tempData.Data);
