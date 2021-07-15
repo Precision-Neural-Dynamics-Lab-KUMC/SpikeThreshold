@@ -12,7 +12,7 @@
 %   Modification: asof 2017-12-07
 
 
-function extractSpikesNsX(dataPaths, envInfo, strobeInfo, filtInfo)
+function extractSpikesREC(dataPaths, envInfo, strobeInfo, filtInfo)
 
 % % Path definition (can add, or can direct to that path)
 % data_paths.exc_path = fileparts(which( mfilename));
@@ -53,14 +53,29 @@ end
 
 version = '0.8';
 
-fileInfo    = openNSx( [dataPaths.input_file_path , envInfo.rec_file_name], 'noread');
+data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
+%fileInfo    = readTrodesExtractedDataFile( data_dir.dat); return structure with Info
 try
-eventInfo   = openNEV( [dataPaths.input_file_path , envInfo.nev_file_name], 'noread');
+    [Events, EventTimeSamples] = readspikegadgetsDIO([dataPaths.input_file_path , envInfo.rec_file_name, '.DIO\' envInfo.rec_file_name]);
+%eventInfo   = readTrodesExtractedDataFile( data_dio.dat); return structure with dio
 catch
-    eventInfo = [];
+    Events = [];
+    EventTimeSamples = [];
+    clockrate = 30000;
 end
 %Check to see if electrode channel is actually in data file, remove those that are not, AGR 20200220 
-ch_in_data_file = [fileInfo.ElectrodesInfo.ElectrodeID];
+
+
+file_names =  dir([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\']);
+ch_in_data_file =[];
+for k = 1:length(file_names)
+   tmp = str2num(file_names(k).name((regexpi(  file_names(k).name, 'nt\d*ch')+2):(regexpi(  file_names(k).name, 'ch1.dat')-1)));
+   if ~isempty(tmp)
+   ch_in_data_file(end+1) = tmp;
+   end
+end
+ch_in_data_file = sort(ch_in_data_file);
+% ch_in_data_file = [fileInfo.ElectrodesInfo.ElectrodeID];
 for iArr = 1:length(envInfo.channels_to_read_by_array)
     envInfo.channels_to_read_by_array{iArr} = envInfo.channels_to_read_by_array{iArr}(ismember(envInfo.channels_to_read_by_array{iArr}, ch_in_data_file));
     envInfo.file_channels_to_read_by_array{iArr} = find(ismember(ch_in_data_file,envInfo.channels_to_read_by_array{iArr}));
@@ -71,16 +86,16 @@ envInfo.file_channels_to_read_by_array = envInfo.file_channels_to_read_by_array(
 
 if ~isempty(strobeInfo)
 %% Event strobe extracting part.
-Events = eventInfo.Data.SerialDigitalIO.UnparsedData;
-EventTimeSamples    = eventInfo.Data.SerialDigitalIO.TimeStamp;
+% Events = eventInfo.Data.SerialDigitalIO.UnparsedData;
+% EventTimeSamples    = eventInfo.Data.SerialDigitalIO.TimeStamp;
 strobeInfo = find_trial_samples(strobeInfo, Events, EventTimeSamples);
 end
 
-numDataPoints = fileInfo.MetaTags.DataPoints(1);
+numDataPoints = size(data_strut.fields.data,1);
 
 %% Filter construction
 %   Sampling frequency (30K)
-envInfo.samp_rate = fileInfo.MetaTags.SamplingFreq;
+envInfo.samp_rate = data_strut.clockrate;
 if ~isfield(filtInfo, 'pre_data')
     if isfield(filtInfo, 'time_pre')
         filtInfo.pre_data       = ceil(filtInfo.time_pre*1e-6*envInfo.samp_rate);   %Number of data points before trigger time point
@@ -138,7 +153,7 @@ end
 if ~isfield(filtInfo, 'num_trials_for_median')
 filtInfo.num_trials_for_median = 50;
 end
-calculate_Medians(envInfo, dataPaths, strobeInfo, filtInfo) 
+calculate_MediansREC(envInfo, dataPaths, strobeInfo, filtInfo) 
 
 
 if isempty(strobeInfo)
@@ -152,7 +167,7 @@ if isempty(strobeInfo)
     strobeInfo.TrialIDs = 1:length(strobeInfo.trial_start_samp);
 end
 
-sigQual_name = regexprep(envInfo.rec_file_name, '.ns\d', '_SigQual.mat');
+sigQual_name = [envInfo.rec_file_name, '_SigQual.mat'];
 %% Converting into nex files
 %   Create empty nex file in save path and write that at same folder.
 % cd( data_paths.save_path );
@@ -166,13 +181,13 @@ for iFile = unique_files
 nexFileData      = create_blank_nex();
 nexFileData.tend = numDataPoints./envInfo.samp_rate;
 
-if exist('eventInfo', 'var') &&  ~isempty(eventInfo) && ~isempty(eventInfo.Data.SerialDigitalIO.TimeStamp)
+if exist('EventTimeSamples', 'var') &&  ~isempty(Events) && ~isempty(EventTimeSamples)
     % Events codes are from .nev files.
     nexFileData.markers{1,1}.name = 'Strobed';
     nexFileData.markers{1,1}.varVersion = 100;
     nexFileData.markers{1,1}.values{1,1}.name = 'DIO';
-    nexFileData.markers{1,1}.values{1,1}.strings = cellfun(@num2str, num2cell(eventInfo.Data.SerialDigitalIO.UnparsedData), 'Uni', false);
-    nexFileData.markers{1,1}.timestamps = eventInfo.Data.SerialDigitalIO.TimeStampSec';
+    nexFileData.markers{1,1}.values{1,1}.strings = cellfun(@num2str, num2cell(Events), 'Uni', false);
+    nexFileData.markers{1,1}.timestamps = EventTimeSamples./envInfo.samp_rate;
 else
     nexFileData = rmfield(nexFileData,{'markers','events'});
 end
@@ -193,35 +208,82 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
         ChMedians = SigQuality(curr_index).WhtChMedians;
         WhtMat = SigQuality(curr_index).WhtMat;
     end
-    ch_string =  'c:';
-    file_channels = sort(envInfo.file_channels_to_read_by_array{iArr},'ascend');
-    ch_string = [ch_string, num2str(file_channels(1))];
-    colon_flag = true;
-    for ch = 2:length(file_channels)
-        if (file_channels(ch)-file_channels(ch-1)) > 1
-            if ~colon_flag
-                ch_string = [ch_string, num2str(file_channels(ch-1))];
-            end
-            ch_string = [ch_string, ',', num2str(file_channels(ch))];
-            colon_flag = true;
-        elseif colon_flag
-            ch_string = [ch_string, ':'];
-            colon_flag = false;
+    
+    
+    for ch = 1:length(SigQuality(iArr).channels)
+        fileData = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat']);
+        if ch == 1
+            tempData = zeros(size(fileData.fields.data,1),32,'int16');
         end
-    end
-    if ~colon_flag
-        ch_string = [ch_string, num2str(file_channels(end))];
+        tempData(:,ch) = fileData.fields.data;
+        clear fileData
     end
     
-    for tr = 1:length(strobeInfo.TrialIDs)
-        if strobeInfo.trial_end_samp(tr) < numDataPoints
-            % Time string
-            time_string = ['t:' num2str(strobeInfo.trial_start_samp(tr)) ':' num2str(strobeInfo.trial_end_samp(tr))];
-            tempData = openNSx( [dataPaths.input_file_path , envInfo.rec_file_name], 'read', ch_string, time_string,  'sample');
-            
+%     for tr = 1:length(strobeInfo.TrialIDs)
+%         if strobeInfo.trial_end_samp(tr) < numDataPoints
+%             % Time string
+%             time_string = ['t:' num2str(strobeInfo.trial_start_samp(tr)) ':' num2str(strobeInfo.trial_end_samp(tr))];
+%             tempData = openNSx( [dataPaths.input_file_path , envInfo.rec_file_name], 'read', ch_string, time_string,  'sample');
+%             
+%             % Double conversion( % Matlab 2017 specific (?) )
+%             tempData.Data   = double(tempData.Data);
+%             tempData        = filter(filtInfo.b, filtInfo.a, tempData.Data');
+%             if filtInfo.prewhiten_data
+%                 tempData = tempData*WhtMat;
+%             end
+%             for ch = 1:length(envInfo.channels_to_read_by_array{iArr})
+%                 if abs(ChMedians(ch)) > 0
+%                     threshold = -filtInfo.threshold_scale_factor*ChMedians(ch)*0.6745;
+%                     threshold_crossings = find(tempData(:,ch)<threshold);
+%                     if exist('trialMargin','var')
+%                         threshold_crossings = threshold_crossings(threshold_crossings>(trialMargin+1) & threshold_crossings< (size(tempData,1)-trialMargin+1));
+%                     end
+%                     %Remove any threshold crossings within the window exclusion 
+%                     if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings([true; (diff(threshold_crossings)>filtInfo.req_base_data)]); end
+%                     %Remove any threshold crossings within the window exclusion 
+%                     if length(threshold_crossings)>2
+%                         short_crossings = [false; diff(threshold_crossings)<filtInfo.peak_excl_data & [true; diff(threshold_crossings(1:(end-1)))>=filtInfo.peak_excl_data]];
+%                         while any(short_crossings)
+%                             threshold_crossings = threshold_crossings(~short_crossings);
+%                             short_crossings = [false; diff(threshold_crossings)<filtInfo.peak_excl_data & [true; diff(threshold_crossings(1:(end-1)))>=filtInfo.peak_excl_data]];
+%                         end
+%                     end
+%                     %Remove any snippets that don't have data at the end of the file
+%                     if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings(threshold_crossings + filtInfo.post_data < size(tempData,1)); end
+%                     %Remove any snippets that don't have data at the beginning of the file
+%                     if ~isempty(threshold_crossings); threshold_crossings = threshold_crossings(threshold_crossings - filtInfo.pre_data > 0); end
+%                     if ~isempty(threshold_crossings)
+%                         curr_spike_snippets = tempData(threshold_crossings + (-filtInfo.pre_data:filtInfo.post_data), ch);
+%                         curr_spike_snippets = reshape(curr_spike_snippets,[],filtInfo.snippet_length);
+%                         %Note, spike times are saved based on the original threshold crossing, not adjusted for the spike alignment
+%                         spike_times{ch}     = [spike_times{ch}; strobeInfo.trial_start_samp(tr)+uint32(threshold_crossings)-1];
+%                         if filtInfo.align_spikes
+%                             peak_times = find_waveform_peaks(curr_spike_snippets', filtInfo.pre_data, filtInfo.peak_window, filtInfo.interp_factor);
+%                             threshold_crossings = threshold_crossings + floor(peak_times)';
+%                             threshold_crossings = threshold_crossings(threshold_crossings>(filtInfo.pre_data+filtInfo.peak_offset));
+%                             threshold_crossings = threshold_crossings((threshold_crossings+(filtInfo.post_data-filtInfo.peak_offset))<size(tempData,1));
+%                             peak_times_fraction = mod(peak_times,1);
+%                             curr_spike_snippets = tempData(threshold_crossings + (-(filtInfo.pre_data+filtInfo.peak_offset):(filtInfo.post_data-filtInfo.peak_offset+1)), ch);
+%                             curr_spike_snippets = reshape(curr_spike_snippets,[],filtInfo.snippet_length+1);
+%                             for n = 1:size(curr_spike_snippets,1)
+%                                 curr_spike_snippets(n,1:(end-1)) = interp1(1:(filtInfo.snippet_length+1), curr_spike_snippets(n,:), (1:filtInfo.snippet_length)+ peak_times_fraction(n), 'spline');
+%                             end
+%                             curr_spike_snippets = curr_spike_snippets(:,1:(end-1));
+%                         end
+%                         
+%                         spike_snippets{ch}  = [spike_snippets{ch}, curr_spike_snippets'];
+%                         
+%                     end
+%                 end
+%             end
+%         end
+%         clear tempData
+%     end
+   
+           
             % Double conversion( % Matlab 2017 specific (?) )
-            tempData.Data   = double(tempData.Data);
-            tempData        = filter(filtInfo.b, filtInfo.a, tempData.Data');
+            tempData   = double(tempData);
+            tempData        = filter(filtInfo.b, filtInfo.a, tempData);
             if filtInfo.prewhiten_data
                 tempData = tempData*WhtMat;
             end
@@ -270,9 +332,7 @@ for iArr = find(envInfo.array_to_fileNum==iFile)  %1:length(envInfo.channels_to_
                     end
                 end
             end
-        end
-        clear tempData
-    end
+        
     fprintf('trial: %4.2d   \n', tr );
     
     

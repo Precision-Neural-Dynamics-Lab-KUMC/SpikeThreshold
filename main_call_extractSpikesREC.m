@@ -14,7 +14,8 @@ addpath(genpath([root_file_path 'added_matlab_tools\HowToReadAndWriteNexAndNex5F
 addpath(genpath('.\extractSpikesFromBroadBand'))
 
 %*****File name to read
-envInfo.rec_file_name	= 'A_20210630_Ped3_Test.rec';
+envInfo.rec_file_name	= 'A_20210713_Ped2_COTPerturb';
+
 
 % %*****Currently set up assuming .ns5 and .nev have same file name, can also
 % %be edited here with a name independent of .ns5 name
@@ -41,7 +42,7 @@ envInfo.array_to_fileNum = ones(size(envInfo.channels_to_read_by_array));
 
  
 root_data_path = 'R:\SOM RSCH\RouseLab\';
-dataPaths.input_file_path	= [root_data_path 'DataFiles\Recorded_Data\Monkey\monk_A\InitialTesting20210622\\'];
+dataPaths.input_file_path	= [root_data_path 'DataFiles\Recorded_Data\Monkey\monk_A\COTPerturb20210713\SpikeGadgets\A_20210713_Ped2_COTPerturb.rec\'];
 % dataPaths.input_file_path	= 'C:\DataFiles\data_raw\monk_p\20160504_COT_precision\P_CerebusData\';
 dataPaths.median_path		= [root_data_path '\DataFiles\Project_Data\20210622_InitialTesting\dataProcessing\SpikeQuality\'];
 dataPaths.save_path			= [root_data_path 'DataFiles\Project_Data\20210622_InitialTesting\dataProcessing\BBtoSpikes\'];
@@ -84,4 +85,4 @@ filtInfo.median_window = 1000;  %1000 ms window for median (only used when not u
 
 strobeInfo = [];
 
-extractSpikesNsX(dataPaths, envInfo, strobeInfo, filtInfo)
+extractSpikesREC(dataPaths, envInfo, strobeInfo, filtInfo)
