@@ -10,8 +10,24 @@ function peak_times = find_waveform_peaks(spike_waveforms, pre_data, peak_window
 %     for n = 1:size(spike_waveforms,2)
 %        interp_spike(:,n) = interp(spike_waveforms((pre_data+1):(pre_data+peak_window+1),n), interp_factor);
 %     end
-    interp_spike = interp1(1:(peak_window+1), spike_waveforms((pre_data+1):(pre_data+peak_window+1),:), 1:(1/interp_factor):(peak_window+1), 'spline');
+    if size(spike_waveforms,2) > 1
+        interp_spike = interp1(1:(peak_window+1), spike_waveforms((pre_data+1):(pre_data+peak_window+1),:), 1:(1/interp_factor):(peak_window+1), 'spline');
+    else  %Needs to be transposed if there is only 1 waveform to make it a t x 1 vector
+         interp_spike = interp1(1:(peak_window+1), spike_waveforms((pre_data+1):(pre_data+peak_window+1),:), 1:(1/interp_factor):(peak_window+1), 'spline')';
+    end
     
     [~, peak_times] = min(interp_spike,[],1);
  peak_times = peak_times./interp_factor;
-
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 

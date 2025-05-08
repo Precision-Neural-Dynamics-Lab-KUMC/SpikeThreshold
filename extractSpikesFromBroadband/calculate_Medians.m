@@ -122,4 +122,3 @@ end
 save([data_paths.median_path sigQual_name],'SigQuality')
 
 end
-

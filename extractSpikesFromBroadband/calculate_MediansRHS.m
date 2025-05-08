@@ -1,4 +1,4 @@
-function calculate_MediansREC(envInfo, data_paths, dataBlocks, filtInfo) 
+function calculate_MediansRHS(envInfo, data_paths, dataBlocks, filtInfo) 
 
 sigQual_name = [envInfo.rec_file_name, '_SigQual.mat'];
 if exist([data_paths.median_path sigQual_name],'file')
@@ -22,13 +22,10 @@ if calc_median_flag
 
  
  %% Current function is to calculate median values.
-    if exist([data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-        data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1.dat']); % %neural data
-    else
-        data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
-    end
+    data_strut = readRHSExtractedDataFile([data_paths.input_file_path 'amp-A-000.dat']);
+
     numDataPoints = size(data_strut.fields.data,1);
-    
+    file_names = dir([data_paths.input_file_path]);
     if isempty(dataBlocks)
         dataBlocks.BlockIDs = 1:filtInfo.num_trials_for_median;
         TestBlockIDs = dataBlocks.BlockIDs;
@@ -58,11 +55,8 @@ for ar = 1:length(envInfo.channels_to_read_by_array)
             SigQuality(curr_index).file_channels = sort(envInfo.file_channels_to_read_by_array{ar},'ascend');
             
             for ch = 1:length(SigQuality(curr_index).channels)
-                if exist([data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-                    tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) '.dat']);
-                else
-                    tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat']);
-                end
+                %%%--- reading base on port orders A-B-C, might need to change if adding more ports
+                tempData = readRHSExtractedDataFile([file_names(SigQuality(curr_index).channels(ch)+2).folder, '\', file_names(SigQuality(curr_index).channels(ch)+2).name]);
                 for tr = 1:length(TestBlockIDs)
                     if dataBlocks.block_end_samp(dataBlocks.BlockIDs==TestBlockIDs(tr))<numDataPoints
                         

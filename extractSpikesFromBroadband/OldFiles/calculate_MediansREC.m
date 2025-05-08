@@ -1,4 +1,4 @@
-function calculate_MediansREC(envInfo, data_paths, dataBlocks, filtInfo) 
+function calculate_Medians(envInfo, data_paths, strobeInfo, filtInfo) 
 
 sigQual_name = [envInfo.rec_file_name, '_SigQual.mat'];
 if exist([data_paths.median_path sigQual_name],'file')
@@ -19,23 +19,26 @@ else
 
 end
 if calc_median_flag
-
+ if ~isempty(strobeInfo) && ~isfield(strobeInfo, 'trial_end_samp')
+        eventInfo   = openNEV( [data_paths.input_file_path , envInfo.nev_file_name], 'noread');
+        %% Event strobe extracting part.
+        Events = eventInfo.Data.SerialDigitalIO.UnparsedData;
+        EventTimeSamples    = eventInfo.Data.SerialDigitalIO.TimeStamp;
+        strobeInfo = find_trial_samples(strobeInfo, Events, EventTimeSamples);
+ end
  
  %% Current function is to calculate median values.
-    if exist([data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-        data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1.dat']); % %neural data
-    else
-        data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
-    end
+    data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
     numDataPoints = size(data_strut.fields.data,1);
-    
-    if isempty(dataBlocks)
-        dataBlocks.BlockIDs = 1:filtInfo.num_trials_for_median;
-        TestBlockIDs = dataBlocks.BlockIDs;
+    if ~isempty(strobeInfo) && length(strobeInfo.TrialIDs) > filtInfo.num_trials_for_median 
+        TestTrialIDs = strobeInfo.TrialIDs(round(linspace(1, length(strobeInfo.TrialIDs), filtInfo.num_trials_for_median)));
+    else
+        strobeInfo.TrialIDs = 1:filtInfo.num_trials_for_median;
+        TestTrialIDs = strobeInfo.TrialIDs;
         numTrialSamples = round((filtInfo.median_window/1000)*data_strut.clockrate);
-        numBetweenTrialSamples = round((numDataPoints-numTrialSamples)/(filtInfo.num_trials_for_median+1));
-        dataBlocks.block_start_samp = numBetweenTrialSamples + (0:(filtInfo.num_trials_for_median-1))*(numBetweenTrialSamples);
-        dataBlocks.block_end_samp = dataBlocks.block_start_samp + numTrialSamples;
+        numBetweenTrialSamples = round(numDataPoints/(filtInfo.num_trials_for_median+2));
+        strobeInfo.trial_start_samp = numBetweenTrialSamples + (0:(filtInfo.num_trials_for_median-1))*(numBetweenTrialSamples+numTrialSamples);
+        strobeInfo.trial_end_samp = strobeInfo.trial_start_samp + numTrialSamples;
     end
     
 for ar = 1:length(envInfo.channels_to_read_by_array)
@@ -51,35 +54,30 @@ for ar = 1:length(envInfo.channels_to_read_by_array)
     end
        
     if ~isempty(curr_index)
-    Data = cell(length(TestBlockIDs),1);
+    Data = cell(length(TestTrialIDs),1);
             
            
             SigQuality(curr_index).channels = sort(envInfo.channels_to_read_by_array{ar},'ascend');
             SigQuality(curr_index).file_channels = sort(envInfo.file_channels_to_read_by_array{ar},'ascend');
             
             for ch = 1:length(SigQuality(curr_index).channels)
-                if exist([data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-                    tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) '.dat']);
-                else
-                    tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat']);
+                tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat']); 
+                    
+            for tr = 1:length(TestTrialIDs)
+                if strobeInfo.trial_end_samp(strobeInfo.TrialIDs==TestTrialIDs(tr))<numDataPoints
+                    
+                    curr_time_points =  [strobeInfo.trial_start_samp(strobeInfo.TrialIDs==TestTrialIDs(tr)), strobeInfo.trial_end_samp(strobeInfo.TrialIDs==TestTrialIDs(tr))];
+                      Data{tr}(:,ch) = double(tempData.fields.data(curr_time_points(1):curr_time_points(2)));
+                   
+                    
+                    
                 end
-                for tr = 1:length(TestBlockIDs)
-                    if dataBlocks.block_end_samp(dataBlocks.BlockIDs==TestBlockIDs(tr))<numDataPoints
-                        
-                        curr_time_points =  [dataBlocks.block_start_samp(dataBlocks.BlockIDs==TestBlockIDs(tr)), dataBlocks.block_end_samp(dataBlocks.BlockIDs==TestBlockIDs(tr))];
-                        Data{tr}(:,ch) = double(tempData.fields.data(curr_time_points(1):curr_time_points(2)));
-                        
-                        
-                        
-                    end
-                end
-                clear tempData
             end
-            for tr = 1:length(TestBlockIDs)
+            clear tempData
+            end
+            for tr = 1:length(TestTrialIDs)
              Data{tr} = filter(filtInfo.b, filtInfo.a, Data{tr});
             end
-            
-
             SigQuality(curr_index).TestMedians = cellfun(@(x) median(abs(x)), Data, 'Uni', false);
             SigQuality(curr_index).TestMedians = cat(1,SigQuality(curr_index).TestMedians{:});
             blank_time_periods = all(SigQuality(curr_index).TestMedians<1,2);

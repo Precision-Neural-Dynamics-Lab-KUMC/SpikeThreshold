@@ -1,6 +1,6 @@
-function calculate_MediansREC(envInfo, data_paths, dataBlocks, filtInfo) 
+function calculate_Medians(envInfo, data_paths, strobeInfo, filtInfo) 
 
-sigQual_name = [envInfo.rec_file_name, '_SigQual.mat'];
+sigQual_name = regexprep(envInfo.ns5_file_name, '.ns\d', '_SigQual.mat');
 if exist([data_paths.median_path sigQual_name],'file')
     load([data_paths.median_path sigQual_name],'SigQuality')
 else
@@ -19,23 +19,26 @@ else
 
 end
 if calc_median_flag
-
+ if ~isempty(strobeInfo) && ~isfield(strobeInfo, 'trial_end_samp')
+        eventInfo   = openNEV( [data_paths.input_file_path , envInfo.nev_file_name], 'noread');
+        %% Event strobe extracting part.
+        Events = eventInfo.Data.SerialDigitalIO.UnparsedData;
+        EventTimeSamples    = eventInfo.Data.SerialDigitalIO.TimeStamp;
+        strobeInfo = find_trial_samples(strobeInfo, Events, EventTimeSamples);
+ end
  
  %% Current function is to calculate median values.
-    if exist([data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-        data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1.dat']); % %neural data
+    fileInfo    = openNSx( [data_paths.input_file_path , envInfo.ns5_file_name], 'noread');
+    numDataPoints = fileInfo.MetaTags.DataPoints(1);
+    if ~isempty(strobeInfo) && length(strobeInfo.TrialIDs) > filtInfo.num_trials_for_median 
+        TestTrialIDs = strobeInfo.TrialIDs(round(linspace(1, length(strobeInfo.TrialIDs), filtInfo.num_trials_for_median)));
     else
-        data_strut = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
-    end
-    numDataPoints = size(data_strut.fields.data,1);
-    
-    if isempty(dataBlocks)
-        dataBlocks.BlockIDs = 1:filtInfo.num_trials_for_median;
-        TestBlockIDs = dataBlocks.BlockIDs;
-        numTrialSamples = round((filtInfo.median_window/1000)*data_strut.clockrate);
-        numBetweenTrialSamples = round((numDataPoints-numTrialSamples)/(filtInfo.num_trials_for_median+1));
-        dataBlocks.block_start_samp = numBetweenTrialSamples + (0:(filtInfo.num_trials_for_median-1))*(numBetweenTrialSamples);
-        dataBlocks.block_end_samp = dataBlocks.block_start_samp + numTrialSamples;
+        strobeInfo.TrialIDs = 1:filtInfo.num_trials_for_median;
+        TestTrialIDs = strobeInfo.TrialIDs;
+        numTrialSamples = round((filtInfo.median_window/1000)*fileInfo.MetaTags.SamplingFreq);
+        numBetweenTrialSamples = round(numDataPoints/(filtInfo.num_trials_for_median+2));
+        strobeInfo.trial_start_samp = numBetweenTrialSamples + (0:(filtInfo.num_trials_for_median-1))*(numBetweenTrialSamples+numTrialSamples);
+        strobeInfo.trial_end_samp = strobeInfo.trial_start_samp + numTrialSamples;
     end
     
 for ar = 1:length(envInfo.channels_to_read_by_array)
@@ -51,35 +54,42 @@ for ar = 1:length(envInfo.channels_to_read_by_array)
     end
        
     if ~isempty(curr_index)
-    Data = cell(length(TestBlockIDs),1);
+    Data = cell(length(TestTrialIDs),1);
             
            
+            SigQuality(curr_index).ch_string =  'c:';
             SigQuality(curr_index).channels = sort(envInfo.channels_to_read_by_array{ar},'ascend');
             SigQuality(curr_index).file_channels = sort(envInfo.file_channels_to_read_by_array{ar},'ascend');
-            
-            for ch = 1:length(SigQuality(curr_index).channels)
-                if exist([data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-                    tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) '.dat']);
-                else
-                    tempData = readTrodesExtractedDataFile( [data_paths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat']);
-                end
-                for tr = 1:length(TestBlockIDs)
-                    if dataBlocks.block_end_samp(dataBlocks.BlockIDs==TestBlockIDs(tr))<numDataPoints
-                        
-                        curr_time_points =  [dataBlocks.block_start_samp(dataBlocks.BlockIDs==TestBlockIDs(tr)), dataBlocks.block_end_samp(dataBlocks.BlockIDs==TestBlockIDs(tr))];
-                        Data{tr}(:,ch) = double(tempData.fields.data(curr_time_points(1):curr_time_points(2)));
-                        
-                        
-                        
+            SigQuality(curr_index).ch_string = [SigQuality(curr_index).ch_string, num2str(SigQuality(curr_index).file_channels(1))]; 
+            colon_flag = true;
+            for ch = 2:length(SigQuality(curr_index).file_channels)
+                if (SigQuality(curr_index).file_channels(ch)-SigQuality(curr_index).file_channels(ch-1)) > 1
+                    if ~colon_flag
+                         SigQuality(curr_index).ch_string = [SigQuality(curr_index).ch_string, num2str(SigQuality(curr_index).file_channels(ch-1))]; %Put last number after colon 
                     end
+                    SigQuality(curr_index).ch_string = [SigQuality(curr_index).ch_string, ',', num2str(SigQuality(curr_index).file_channels(ch))]; %Add comma plus next number
+                    colon_flag = true;
+                elseif colon_flag
+                    SigQuality(curr_index).ch_string = [SigQuality(curr_index).ch_string, ':'];
+                    colon_flag = false;
                 end
-                clear tempData
             end
-            for tr = 1:length(TestBlockIDs)
-             Data{tr} = filter(filtInfo.b, filtInfo.a, Data{tr});
+            if ~colon_flag
+                SigQuality(curr_index).ch_string = [SigQuality(curr_index).ch_string, num2str(SigQuality(curr_index).file_channels(end))]; 
             end
             
-
+           
+            for tr = 1:length(TestTrialIDs)
+                if strobeInfo.trial_end_samp(strobeInfo.TrialIDs==TestTrialIDs(tr))<numDataPoints
+                    
+                    time_string = ['t:' num2str(strobeInfo.trial_start_samp(strobeInfo.TrialIDs==TestTrialIDs(tr))) ':' num2str(strobeInfo.trial_end_samp(strobeInfo.TrialIDs==TestTrialIDs(tr)))];
+                    
+                    tempData = openNSx( [data_paths.input_file_path , envInfo.ns5_file_name], 'read', SigQuality(curr_index).ch_string, time_string,  'sample');
+                    Data{tr} = filter(filtInfo.b, filtInfo.a, double(tempData.Data'));
+                    
+                    clear tempData
+                end
+            end
             SigQuality(curr_index).TestMedians = cellfun(@(x) median(abs(x)), Data, 'Uni', false);
             SigQuality(curr_index).TestMedians = cat(1,SigQuality(curr_index).TestMedians{:});
             blank_time_periods = all(SigQuality(curr_index).TestMedians<1,2);

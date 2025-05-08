@@ -22,8 +22,6 @@ end
 allEvents = allEvents(sort_index);
 allBits = allBits(sort_index);
 
-%subtract timestamp at creation to try to see if it fixes alignment
-allTimestamps = allTimestamps - dio{1}.first_timestamp;%timestamp_at_creation
 %*****Construct matrix of discrete event codes
 codeNum = 1;
 eventCode = [0 0 0 0 0];
@@ -39,8 +37,8 @@ for n = 1 : length(allEvents)
             firstSix = 0;
             if sum(eventCode) ~= 0
                 codes{codeInd} = eventCode;
-                intCodes(codeInd,1) = sum(eventCode .* 2.^(0:4));
-                eventTimes(codeInd,1) = allTimestamps(n);
+                intCodes(codeInd) = sum(eventCode .* 2.^(0:4));
+                eventTimes(codeInd) = allTimestamps(n);
                 codeInd = codeInd + 1;
             end
         end

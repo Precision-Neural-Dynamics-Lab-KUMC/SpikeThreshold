@@ -9,10 +9,11 @@
 % v0.8: Adam Rouse, 7/01/2021
 % v0.9: Adam Rouse, 4/15/2022
 % v1.0: Adam Rouse, 2/1/2023
+% v1.1: Willy Lee, 6/1/2023 adapt for Intan systen
 
 
 
-function extractSpikesREC(dataPaths, envInfo, dataBlocks, filtInfo)
+function extractSpikesRHS(dataPaths, envInfo, dataBlocks, filtInfo)
 
 % % Path definition (can add, or can direct to that path)
 % data_paths.exc_path = fileparts(which( mfilename));
@@ -45,32 +46,40 @@ end
 % cd(data_paths.file_path);
 
 
-version = '1.0';
+version = '1.1';
 
-if exist([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-    data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1.dat']); % %neural data
-else
-    data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
-end
+% data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
+%When read “One File Per Channel” Format
+% dataPaths='R:\SOM RSCH\RouseLab\DataFiles\Recorded_Data\Monkey\monk_A\COTHold2022\IntanRHS\A_COTHold_20230530_230530_132913\';
+data_strut = readRHSExtractedDataFile([dataPaths.input_file_path 'amp-A-000.dat']);
+
 try
-    [Events, EventTimeSamples, clockrate] = readspikegadgetsDIO([dataPaths.input_file_path , envInfo.rec_file_name, '.DIO\' envInfo.rec_file_name]);
+    [Events, EventTimeSamples, clockrate] = readIntanRHSDIO(dataPaths);
 catch
     Events = [];
     EventTimeSamples = [];
     clockrate = 30000;
 end
+% end
 %Check to see if electrode channel is actually in data file, remove those that are not, AGR 20200220
-
-file_names =  dir([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\']);
+%add port and signal band determination to check channel numbers in Intan sys, need to hard code the ports being used, WL 20230531
+file_names =  dir([dataPaths.input_file_path]);
 ch_in_data_file =[];
 for k = 1:length(file_names)
-    if exist([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-        tmp = str2num(file_names(k).name((regexpi( file_names(k).name, 'nt')+2):(regexpi(  file_names(k).name, '.dat')-1)));
-    else
-        tmp = str2num(file_names(k).name((regexpi(  file_names(k).name, 'nt\d*ch')+2):(regexpi(  file_names(k).name, 'ch1.dat')-1)));
-    end
+    tmp = str2num(file_names(k).name((regexpi(  file_names(k).name, '\d*')):(regexpi(  file_names(k).name, '.dat')-1)));
+    num_port = file_names(k).name((regexpi(  file_names(k).name, '\d*')-2));
+
     if ~isempty(tmp)
-        ch_in_data_file(end+1) = tmp;
+        sig_band = file_names(k).name(1:3);
+        if all(sig_band == 'amp')
+            if num_port == 'A'
+                ch_in_data_file(end+1) = tmp+1;
+            elseif num_port == 'B'
+                ch_in_data_file(end+1) = tmp+33;
+            elseif num_port == 'C'
+                ch_in_data_file(end+1) = tmp+65;
+            end
+        end
     end
 end
 ch_in_data_file = sort(ch_in_data_file);
@@ -148,7 +157,7 @@ end
 if ~isfield(filtInfo, 'num_trials_for_median')
     filtInfo.num_trials_for_median = 50;
 end
-calculate_MediansREC(envInfo, dataPaths, [], filtInfo)
+calculate_MediansRHS(envInfo, dataPaths, [], filtInfo)
 
 
 
@@ -169,7 +178,6 @@ sigQual_name = [envInfo.rec_file_name, '_SigQual.mat'];
 % cd( data_paths.save_path );
 
 unique_files = unique(envInfo.array_to_fileNum);
-
 
 
 for iFile = unique_files
@@ -213,11 +221,8 @@ for iFile = unique_files
         for tr = 1:length(dataBlocks.BlockIDs)
             if dataBlocks.block_end_samp(tr) <= numDataPoints
                 for ch = 1:length(SigQuality(iArr).channels)
-                    if exist([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-                        fileData = readTrodesExtractedDataFileWithTime( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) '.dat'],dataBlocks.block_start_samp(tr),dataBlocks.block_end_samp(tr));
-                    else
-                        fileData = readTrodesExtractedDataFileWithTime( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat'],dataBlocks.block_start_samp(tr),dataBlocks.block_end_samp(tr));
-                    end
+                    fileData = readRHSExtractedDataFile([file_names(SigQuality(curr_index).channels(ch)+2).folder, '\', file_names(SigQuality(curr_index).channels(ch)+2).name],dataBlocks.block_start_samp(tr),dataBlocks.block_end_samp(tr));
+
                     if ch == 1
                         tempData = zeros(size(fileData.fields.data,1),32,'double');
                     end
@@ -337,6 +342,6 @@ for iFile = unique_files
         nexFileData.waves{k}.name((end+1):64)   = 0;
     end
     save('ThresholdedData.mat', 'nexFileData');  %For debugging
-    writeNex5File(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}]);
-%     writeNexFile(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}] );
+    writeNex5File(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile} '5']);
+    %     writeNexFile(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}] );
 end
