@@ -10,47 +10,13 @@
 % v0.9: Adam Rouse, 4/15/2022
 % v1.0: Adam Rouse, 2/1/2023
 % v1.1: Willy Lee, 6/1/2023 adapt for Intan systen
-
+% v2.0: Adam Rouse, 5/9/2025 Merging back to a single extractSpikes call
 
 
 function extractSpikesRHS(dataPaths, envInfo, dataBlocks, filtInfo)
 
-% % Path definition (can add, or can direct to that path)
-% data_paths.exc_path = fileparts(which( mfilename));
-% cd(data_paths.exc_path); cd('../..'); data_paths.ripple_main = pwd;
 
 
-
-if nargin < 4 || isempty(filtInfo)
-    filtInfo.filt_order = 4;  %4th order filter
-    filtInfo.band_limits = [250, 5000]; % bandpass between 250-7500 Hz
-    filtInfo.time_pre       = 175;    % Amount of time before trigger for snippet (microseconds)
-    filtInfo.time_post      = 625;    % Amount of time after trigger for snippet (microseconds)
-    filtInfo.time_peak_excl = 625;   %Minimum time from previous threshold crossing that the next spike can occur
-    filtInfo.time_req_baseline = 175;  %Minimum time signal must be below threshold crossing before next spike can occur
-    filtInfo.peak_window    = 150;   %Time after trigger where waveform peak can occur  (microseconds)
-    filtInfo.align_spikes   = false;
-    filtInfo.throwout_crosstalk = false;
-    filtInfo.throwout_large_artifact = false;
-end
-
-% if ~isfield(envInfo, 'ch_offset')
-%     envInfo.ch_offset = 0;
-% end
-
-% path.func_path      = '/home/syoo/Dropbox/HaydenLab_Rouse_Shared/extractSpikesFromBroadband';
-% data_paths.input_file_path     = fullfile( data_paths.ripple_main, [envInfo.monkey, '/', envInfo.task, '/' envInfo.date_str] );
-% data_paths.median_path   = fullfile( data_paths.file_path, 'SignalQuality' );  %For saving the median values for each channel in a .mat file
-% data_paths.save_path     = fullfile( data_paths.file_path, 'Save_data');
-
-% cd(data_paths.file_path);
-
-
-version = '1.1';
-
-% data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
-%When read “One File Per Channel” Format
-% dataPaths='R:\SOM RSCH\RouseLab\DataFiles\Recorded_Data\Monkey\monk_A\COTHold2022\IntanRHS\A_COTHold_20230530_230530_132913\';
 data_strut = readRHSExtractedDataFile([dataPaths.input_file_path 'amp-A-000.dat']);
 
 try

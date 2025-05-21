@@ -1,4 +1,4 @@
-% For extracting spikes from REC files from SpikeGadgets
+% For extracting spikes from .ns5 file saved with Ripple and saving spike waveforms in a .nex file
 % Original file: Adam Rouse, 12/4/17
 % Modified version: Seng Bum Michael Yoo, 12/07/2017.
 % v0.2: Adam Rouse, 12/11/2017
@@ -9,37 +9,57 @@
 % v0.8: Adam Rouse, 7/01/2021
 % v0.9: Adam Rouse, 4/15/2022
 % v1.0: Adam Rouse, 2/1/2023
+% v1.1: Willy Lee, 6/1/2023 adapt for Intan systen
+% v1.2: Adam Rouse, 8/13/2024, changed file opening to more explicitly use port and channel number rather than relying on dir
+% v1.3: Xavier Scherschligt implemented Dr. Rouse's EventDropTest_final.m (L:58-273),  9/10/24
 % v2.0: Adam Rouse, 5/9/2025 Merging back to a single extractSpikes call
 
 
-function extractSpikesREC(dataPaths, envInfo, dataBlocks, filtInfo)
+function extractSpikesRHD(dataPaths, envInfo, dataBlocks, filtInfo)
 
-
-
-if exist([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-    data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1.dat']); % %neural data
-else
-    data_strut = readTrodesExtractedDataFile( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']); % %neural data
+if isempty(which('read_Intan_RHD2000_file.m'))
+    addpath('./IntanFileReading/')
 end
-try
-    [Events, EventTimeSamples, clockrate] = readspikegadgetsDIO([dataPaths.input_file_path , envInfo.rec_file_name, '.DIO\' envInfo.rec_file_name]);
-catch
-    Events = [];
-    EventTimeSamples = [];
-    clockrate = 30000;
-end
+
+data_strut = readRHDExtractedDataFile([dataPaths.input_file_path 'amp-A-000.dat']);
+
+
+
 %Check to see if electrode channel is actually in data file, remove those that are not, AGR 20200220
-
-file_names =  dir([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\']);
+%add port and signal band determination to check channel numbers in Intan sys, need to hard code the ports being used, WL 20230531
+file_names =  dir([dataPaths.input_file_path, '*.dat']);
 ch_in_data_file =[];
 for k = 1:length(file_names)
-    if exist([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-        tmp = str2num(file_names(k).name((regexpi( file_names(k).name, 'nt')+2):(regexpi(  file_names(k).name, '.dat')-1)));
-    else
-        tmp = str2num(file_names(k).name((regexpi(  file_names(k).name, 'nt\d*ch')+2):(regexpi(  file_names(k).name, 'ch1.dat')-1)));
-    end
+    tmp = str2num(file_names(k).name((regexpi(  file_names(k).name, '\d*')):(regexpi(  file_names(k).name, '.dat')-1)));
+    num_port = file_names(k).name((regexpi(  file_names(k).name, '\d*')-2));
+
     if ~isempty(tmp)
-        ch_in_data_file(end+1) = tmp;
+        sig_band = file_names(k).name(1:3);
+        if length(file_names) < 384
+            %when recording 64 ch ports
+            if all(sig_band == 'amp')
+                if num_port == 'A'
+                    ch_in_data_file(end+1) = tmp+1;
+                elseif num_port == 'B'
+                    ch_in_data_file(end+1) = tmp+33;
+                elseif num_port == 'C'
+                    ch_in_data_file(end+1) = tmp+65;
+                elseif num_port == 'D'
+                    ch_in_data_file(end+1) = tmp+97;
+                end
+            end
+        else
+            %when recording 128 ch ports
+            if all(sig_band == 'amp')
+                if num_port == 'A'
+                    ch_in_data_file(end+1) = tmp+1;
+                elseif num_port == 'B'
+                    ch_in_data_file(end+1) = tmp+129;
+                elseif num_port == 'C'
+                    ch_in_data_file(end+1) = tmp+257;
+                end
+            end
+        end
     end
 end
 ch_in_data_file = sort(ch_in_data_file);
@@ -54,12 +74,17 @@ envInfo.file_channels_to_read_by_array = envInfo.file_channels_to_read_by_array(
 
 
 
-numDataPoints = size(data_strut.fields.data,1);
+numDataPoints = length(data_strut.fields.data);
 
 
 %% Filter construction
+disp("In extractSpikesRHD - Constructing Filter")
 %   Sampling frequency (30K)
-envInfo.samp_rate = data_strut.clockrate;
+if ~isfield(envInfo, 'samp_rate')
+    envInfo.samp_rate = data_strut.clockrate;
+elseif envInfo.samp_rate ~= data_strut.clockrate
+    error('Neural data and events have different sampling rate!')
+end
 if ~isfield(filtInfo, 'pre_data')
     if isfield(filtInfo, 'time_pre')
         filtInfo.pre_data       = ceil(filtInfo.time_pre*1e-6*envInfo.samp_rate);   %Number of data points before trigger time point
@@ -113,11 +138,12 @@ end
 
 
 %% Calculate Median
+disp("In extractSpikesRHD - Calculating Median")
 % cd(data_paths.exc_path);
 if ~isfield(filtInfo, 'num_trials_for_median')
     filtInfo.num_trials_for_median = 50;
 end
-calculate_MediansREC(envInfo, dataPaths, [], filtInfo)
+calculate_MediansRHD(envInfo, dataPaths, [], filtInfo)
 
 
 
@@ -134,11 +160,11 @@ end
 
 sigQual_name = [envInfo.rec_file_name, '_SigQual.mat'];
 %% Converting into nex files
+disp("In extractSpikesRHD - Converting into nex files")
 %   Create empty nex file in save path and write that at same folder.
 % cd( data_paths.save_path );
 
 unique_files = unique(envInfo.array_to_fileNum);
-
 
 
 for iFile = unique_files
@@ -146,13 +172,13 @@ for iFile = unique_files
     nexFileData      = create_blank_nex();
     nexFileData.tend = numDataPoints./envInfo.samp_rate;
 
-    if exist('EventTimeSamples', 'var') &&  ~isempty(Events) && ~isempty(EventTimeSamples)
-        % Events codes are from .nev files.
+    if isfield(envInfo, 'EventTimeSamples') &&  ~isempty(envInfo.Events) && ~isempty(envInfo.EventTimeSamples)
+       
         nexFileData.markers{1,1}.name = 'Strobed';
         nexFileData.markers{1,1}.varVersion = 100;
         nexFileData.markers{1,1}.values{1,1}.name = 'DIO';
-        nexFileData.markers{1,1}.values{1,1}.strings = cellfun(@num2str, num2cell(Events), 'Uni', false);
-        nexFileData.markers{1,1}.timestamps = double(EventTimeSamples)./double(envInfo.samp_rate);
+        nexFileData.markers{1,1}.values{1,1}.strings = cellfun(@num2str, num2cell(envInfo.Events), 'Uni', false);
+        nexFileData.markers{1,1}.timestamps = double(envInfo.EventTimeSamples)./double(envInfo.samp_rate);
     else
         nexFileData = rmfield(nexFileData,{'markers','events'});
     end
@@ -182,15 +208,22 @@ for iFile = unique_files
         for tr = 1:length(dataBlocks.BlockIDs)
             if dataBlocks.block_end_samp(tr) <= numDataPoints
                 for ch = 1:length(SigQuality(iArr).channels)
-                    if exist([dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt1ch1.dat']) == 0
-                        fileData = readTrodesExtractedDataFileWithTime( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) '.dat'],dataBlocks.block_start_samp(tr),dataBlocks.block_end_samp(tr));
-                    else
-                        fileData = readTrodesExtractedDataFileWithTime( [dataPaths.input_file_path , envInfo.rec_file_name, '.raw\' envInfo.rec_file_name '.raw_nt' num2str(SigQuality(curr_index).channels(ch)) 'ch1.dat'],dataBlocks.block_start_samp(tr),dataBlocks.block_end_samp(tr));
+                    if SigQuality(curr_index).port(ch) == 'A'
+                        ch_offset = 0;
+                    elseif SigQuality(curr_index).port(ch) == 'B'
+                        ch_offset = 128;
+                    elseif SigQuality(curr_index).port(ch) == 'C'
+                        ch_offset = 256;
                     end
+                    curr_file_index = find(arrayfun(@(x) strcmpi(x.name, ['amp-' SigQuality(curr_index).port(ch) '-' num2str(SigQuality(curr_index).channels(ch)-ch_offset-1,'%03i') '.dat']), file_names));
+
+                    fileData = readRHDExtractedDataFile([file_names(curr_file_index).folder, '\', file_names(curr_file_index).name],dataBlocks.block_start_samp(tr),dataBlocks.block_end_samp(tr));
+
                     if ch == 1
                         tempData = zeros(size(fileData.fields.data,1),32,'double');
                     end
                     tempData(:,ch) = double(fileData.fields.data);
+                    
                     clear fileData
                 end
                 tempData        = filter(filtInfo.b, filtInfo.a, tempData);
@@ -305,7 +338,10 @@ for iFile = unique_files
         nexFileData.neurons{k}.name((end+1):64) = 0;  %Add null character to name to make 64 character string padded by nulls, important for reading back into plexon offline sorter
         nexFileData.waves{k}.name((end+1):64)   = 0;
     end
-    save('ThresholdedData.mat', 'nexFileData');  %For debugging
-    writeNex5File(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}]);
-%     writeNexFile(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}] );
+
+    nexFileData = fix_empty_units(nexFileData);
+
+    %     save('A_20231005_ThresholdedData.mat', 'nexFileData', '-v7.3');  %For debugging
+    writeNex5File(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile} '5']);
+    %     writeNexFile(nexFileData, [dataPaths.save_path, envInfo.output_names{iFile}] );
 end
